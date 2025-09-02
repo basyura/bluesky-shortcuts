@@ -637,36 +637,24 @@ class BlueSkyShortcuts {
     }
 
     async loadMore() {
-        const loadPostsButton = document.querySelector( 'div[data-testid="loadLatestBtn"] button') ?? null;
+        const { feedTabs = [], currentFeedIndex = 0 } = this.appState.state;
+        const activeFromIndex = feedTabs[currentFeedIndex]?.element;
+        const activeFromFlag = feedTabs.find(t => t?.isActive)?.element;
 
-        if (loadPostsButton) {
-            this.appState.updateState({ currentPost: null });
-            
-            const { currentController } = this.appState.state;
-            if (currentController) {
-                currentController.abort();
-            }
-    
-            const newController = new AbortController();
-            this.appState.updateState({ currentController: newController });
+        const activeTabEl = activeFromIndex || activeFromFlag;
+        if (activeTabEl == null || !document.contains(activeTabEl)) {
+            return;
+        }
 
-            loadPostsButton.click();
-    
-            try {
-                await DOMUtils.waitForElement('[data-testid*="-feed-flatlist"]', 5000, newController.signal);
-                await new Promise(resolve => setTimeout(resolve, 300));
-                const visiblePosts = DOMUtils.findVisiblePosts();
-                
-                if (visiblePosts.length > 0) {
-                    const firstPost = visiblePosts[0];
-                    this.logger.debug('Selecting first post after loading new posts:', firstPost);
-                    this.appState.updateState({ currentPost: firstPost });
-                    DOMUtils.safelyScrollIntoView(firstPost);
-                }
-            } catch (error) {
-                if (error !== 'cancelled') {
-                    this.logger.error('Failed to load new posts', error);
-                }
+        this.appState.updateState({ currentPost: null });
+
+        try {
+            const loadPromise = this.waitForFeedLoad();
+            activeTabEl.click();
+            await loadPromise;
+        } catch (error) {
+            if (error !== 'cancelled') {
+              this.logger.error('Failed to reload via active tab', error);
             }
         }
     }
